@@ -8,9 +8,9 @@ Supports multiple files and automatic chunk processing
 import csv
 import argparse
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
-from collections import defaultdict, Counter
+from collections import defaultdict, OrderedDict
 import statistics
 import json
 from pathlib import Path
@@ -413,7 +413,114 @@ class PNLAnalyzer:
         
         print(f"\nDetailed analysis exported to: {output_file}")
     
-    def run_analysis(self, export_json=False):
+    def export_monthly_csv_report(self, output_file=None):
+        """Export monthly breakdown CSV report with revenue categories"""
+        if not output_file:
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            output_file = f"monthly_pnl_report_{timestamp}.csv"
+        
+        # Define revenue sources (including all possible revenue event types)
+        revenue_sources = ['doghouse', 'lottery', 'pumpup', 'raffle', 'bucket_staking',
+                          'suilotto_bucket_interest', 'unihouse_reward', 'gas_rebates',
+                          'interest_withdraw', 'liquid-staking']
+        
+        # Initialize monthly data structure
+        monthly_data = OrderedDict()
+        
+        # Process data by month
+        for record in self.data:
+            month_key = record['timestamp'].strftime('%Y-%m')
+            
+            if month_key not in monthly_data:
+                monthly_data[month_key] = {
+                    'Pre-Unihouse PNL': Decimal('0'),
+                    'Staking PNL': Decimal('0'),
+                    'Fee PNL': Decimal('0'),
+                    'Referral Fee': Decimal('0')
+                }
+                # Initialize revenue sources
+                for source in revenue_sources:
+                    monthly_data[month_key][f'Revenue_{source}'] = Decimal('0')
+            
+            # Categorize the transaction
+            tx_type = record['type']
+            pnl = record['pnl']
+            
+            if tx_type.startswith('Pre-Unihouse:'):
+                monthly_data[month_key]['Pre-Unihouse PNL'] += pnl
+            elif tx_type == 'Staking Revenue':
+                monthly_data[month_key]['Staking PNL'] += pnl
+            elif tx_type == 'Fee Revenue':
+                monthly_data[month_key]['Fee PNL'] += pnl
+            elif tx_type == 'Referral Fee':
+                monthly_data[month_key]['Referral Fee'] += pnl
+            elif tx_type.startswith('Revenue Event:'):
+                # Extract revenue source
+                source = tx_type.replace('Revenue Event:', '')
+                if source in revenue_sources:
+                    monthly_data[month_key][f'Revenue_{source}'] += pnl
+        
+        # Write CSV file
+        with open(output_file, 'w', newline='') as csvfile:
+            # Define column headers
+            fieldnames = ['Month', 'Pre-Unihouse PNL']
+            for source in revenue_sources:
+                fieldnames.append(f'Revenue_{source}')
+            fieldnames.extend(['Revenue_Total', 'Staking PNL', 'Fee PNL', 'Referral Fee', 'Total PNL'])
+            
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+            
+            # Initialize totals
+            totals = {field: Decimal('0') for field in fieldnames if field != 'Month'}
+            
+            # Write monthly rows
+            for month, data in monthly_data.items():
+                row = {'Month': month}
+                
+                # Add main categories
+                row['Pre-Unihouse PNL'] = f"{float(data['Pre-Unihouse PNL']):.2f}"
+                totals['Pre-Unihouse PNL'] += data['Pre-Unihouse PNL']
+                
+                # Add revenue sources
+                revenue_total = Decimal('0')
+                for source in revenue_sources:
+                    key = f'Revenue_{source}'
+                    value = data.get(key, Decimal('0'))
+                    row[key] = f"{float(value):.2f}"
+                    revenue_total += value
+                    totals[key] += value
+                
+                # Add revenue total
+                row['Revenue_Total'] = f"{float(revenue_total):.2f}"
+                totals['Revenue_Total'] += revenue_total
+                
+                # Add other categories
+                row['Staking PNL'] = f"{float(data['Staking PNL']):.2f}"
+                row['Fee PNL'] = f"{float(data['Fee PNL']):.2f}"
+                row['Referral Fee'] = f"{float(data['Referral Fee']):.2f}"
+                
+                totals['Staking PNL'] += data['Staking PNL']
+                totals['Fee PNL'] += data['Fee PNL']
+                totals['Referral Fee'] += data['Referral Fee']
+                
+                # Calculate total PNL
+                total_pnl = (data['Pre-Unihouse PNL'] + revenue_total + 
+                            data['Staking PNL'] + data['Fee PNL'] + data['Referral Fee'])
+                row['Total PNL'] = f"{float(total_pnl):.2f}"
+                totals['Total PNL'] += total_pnl
+                
+                writer.writerow(row)
+            
+            # Write totals row
+            total_row = {'Month': 'Total'}
+            for field in fieldnames[1:]:  # Skip 'Month'
+                total_row[field] = f"{float(totals[field]):.2f}"
+            writer.writerow(total_row)
+        
+        print(f"\nMonthly CSV report exported to: {output_file}")
+    
+    def run_analysis(self, export_json=False, export_monthly_csv=False):
         """Run complete analysis"""
         if not self.load_data():
             return False
@@ -430,6 +537,10 @@ class PNLAnalyzer:
             base_name = Path(self.csv_files[0]).stem
             output_file = f"{base_name}_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
             self.export_detailed_analysis(output_file)
+        
+        # Export monthly CSV report if requested
+        if export_monthly_csv:
+            self.export_monthly_csv_report()
         
         return True
 
@@ -461,6 +572,8 @@ def main():
                        help='CSV files to analyze (supports multiple files)')
     parser.add_argument('--export-json', action='store_true',
                        help='Export detailed analysis to JSON file')
+    parser.add_argument('--export-monthly-csv', action='store_true',
+                       help='Export monthly breakdown to CSV file')
     parser.add_argument('--auto-chunks', action='store_true',
                        help='Automatically detect and process chunk files')
     parser.add_argument('--version', action='version', version='PNL Analyzer 2.1')
@@ -505,7 +618,8 @@ def main():
     analyzer = PNLAnalyzer(csv_files)
     
     try:
-        success = analyzer.run_analysis(export_json=args.export_json)
+        success = analyzer.run_analysis(export_json=args.export_json, 
+                                       export_monthly_csv=args.export_monthly_csv)
         if not success:
             sys.exit(1)
     except KeyboardInterrupt:

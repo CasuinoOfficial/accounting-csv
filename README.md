@@ -42,6 +42,9 @@ Always use quotes: `python3 GetTotalPNL.py "My Portfolio Data.csv"`
 # Auto-detect and analyze chunk files (RECOMMENDED - primary usage)
 python3 GetTotalPNL.py --auto-chunks
 
+# Export monthly breakdown to CSV report (NEW)
+python3 GetTotalPNL.py --auto-chunks --export-monthly-csv
+
 # Combine chunk processing with JSON export
 python3 GetTotalPNL.py --auto-chunks --export-json
 
@@ -53,6 +56,12 @@ python3 GetTotalPNL.py your_data.csv
 
 # Export detailed analysis to JSON
 python3 GetTotalPNL.py --auto-chunks --export-json
+
+# Export monthly breakdown to CSV (NEW)
+python3 GetTotalPNL.py --auto-chunks --export-monthly-csv
+
+# Combine all export options
+python3 GetTotalPNL.py --auto-chunks --export-json --export-monthly-csv
 
 # Show help
 python3 GetTotalPNL.py --help
@@ -99,6 +108,7 @@ Each transaction digest can be verified on Sui network explorers:
 - **Multi-File Processing**: Analyze multiple CSV files simultaneously
 - **Automatic Chunk Detection**: Automatically finds and processes chunk_1.csv, chunk_2.csv, etc.
 - **JSON Export**: Machine-readable data for Excel/PowerBI integration
+- **Monthly CSV Reports**: Export monthly breakdown by revenue categories (NEW)
 - **Progress Tracking**: Real-time processing updates for large files
 - **Data Quality**: Automatic validation and error reporting
 - **Statistical Analysis**: Comprehensive risk and performance metrics
@@ -118,6 +128,30 @@ python3 GetTotalPNL.py chunk_1.csv chunk_2.csv chunk_3.csv chunk_4.csv
 ```
 
 The tool will combine all chunks and provide unified analysis across all files, plus a breakdown showing contribution from each chunk.
+
+### Monthly CSV Export (NEW)
+
+The `--export-monthly-csv` flag generates a detailed monthly breakdown report with the following columns:
+- **Month**: Year-Month format (e.g., 2024-06)
+- **Pre-Unihouse PNL**: Total from all Pre-Unihouse game queries
+- **Revenue Categories**: Individual columns for each revenue source:
+  - Revenue_doghouse
+  - Revenue_lottery
+  - Revenue_pumpup
+  - Revenue_raffle
+  - Revenue_bucket_staking
+  - Revenue_suilotto_bucket_interest
+  - Revenue_unihouse_reward
+  - Revenue_gas_rebates
+  - Revenue_interest_withdraw
+  - Revenue_liquid-staking
+- **Revenue_Total**: Sum of all revenue categories
+- **Staking PNL**: Staking revenue
+- **Fee PNL**: Fee revenue
+- **Referral Fee**: Referral fees
+- **Total PNL**: Sum of all PNL categories
+
+The CSV includes a "Total" row at the bottom with sums for all columns. This format is ideal for importing into Excel or other analysis tools.
 
 ## 🔧 Troubleshooting
 
